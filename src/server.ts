@@ -51,7 +51,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     const model = await workersai("@cf/meta/llama-3.1-8b-instruct");
 
     const result = streamText({
-      model: model,
+      model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
       system: `You are a helpful assistant that can understand images. You can check the weather, get the user's timezone, run calculations, and schedule tasks. When users share images, describe what you see and answer questions about them.
 
 ${getSchedulePrompt({ date: new Date() })}
