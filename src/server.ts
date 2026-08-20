@@ -1,4 +1,3 @@
-```ts
 import { createWorkersAI } from "workers-ai-provider";
 import { callable, routeAgentRequest, type Schedule } from "agents";
 import { getSchedulePrompt, scheduleSchema } from "agents/schedule";
@@ -22,7 +21,9 @@ export class ChatAgent extends AIChatAgent<Env> {
       customHandler: (result) => {
         if (result.authSuccess) {
           return new Response("<script>window.close();</script>", {
-            headers: { "content-type": "text/html" },
+            headers: {
+              "content-type": "text/html"
+            },
             status: 200
           });
         }
@@ -30,7 +31,9 @@ export class ChatAgent extends AIChatAgent<Env> {
         return new Response(
           `Authentication Failed: ${result.authError || "Unknown error"}`,
           {
-            headers: { "content-type": "text/plain" },
+            headers: {
+              "content-type": "text/plain"
+            },
             status: 400
           }
         );
@@ -52,58 +55,51 @@ export class ChatAgent extends AIChatAgent<Env> {
     _onFinish: unknown,
     options?: OnChatMessageOptions
   ) {
+    const mcpTools = this.mcp.getAITools();
+
     const workersai = createWorkersAI({
       binding: this.env.AI
     });
 
-    const mcpTools = this.mcp.getAITools();
-
     const result = streamText({
-      /*
-       * 使用 Cloudflare 当前官方 Agents 文档推荐的
-       * GLM-4.7-Flash。
-       *
-       * 这个模型原生支持 function calling，
-       * 更适合当前 AIChatAgent + AI SDK 的工具调用。
-       */
       model: workersai("@cf/zai-org/glm-4.7-flash"),
 
-      system: `You are a helpful, intelligent AI assistant.
+      system: `You are a helpful AI assistant.
 
 You can:
 - Have natural conversations with the user.
-- Understand and answer questions in multiple languages.
+- Understand questions in multiple languages.
 - Understand images provided by the user.
-- Check weather information when appropriate.
-- Get the user's timezone when needed.
+- Check weather when the user asks about weather.
+- Get the user's timezone when the user asks about their timezone or local time.
 - Perform mathematical calculations.
-- Schedule tasks and reminders.
-- Use MCP tools when they are available.
+- Schedule tasks.
+- Use MCP tools when appropriate.
 
 IMPORTANT RULES:
 
-1. For normal conversation such as "hi", "hello", "你好", "你是谁", etc.,
-   respond naturally without calling a tool.
+1. For normal greetings such as "hi", "hello", "你好", "hey", etc.,
+   respond naturally and DO NOT call any tools.
 
-2. Only call a tool when the user's request actually requires that tool.
+2. Only call a tool when the user's request actually requires it.
 
-3. Do NOT call getUserTimezone merely because the user says hello.
+3. Do not call getUserTimezone just because the user says hello.
 
-4. Do NOT repeatedly call the same tool unless the previous result is insufficient.
+4. Do not repeatedly call the same tool.
 
-5. After receiving a tool result, use that result to produce a normal natural-language answer.
+5. After receiving a tool result, answer the user naturally using that result.
 
-6. Never expose internal tool-call JSON, tool schemas, or implementation details
-   unless the user explicitly asks about them.
+6. Never expose internal tool-call JSON or implementation details.
 
-7. Keep answers concise and natural unless the user asks for a detailed explanation.
+7. If a tool fails, do not repeatedly retry it.
 
-8. If a tool fails, do not repeatedly retry the same tool. Explain the problem
-   naturally to the user.
+8. Keep normal conversational responses concise and natural.
 
 ${getSchedulePrompt({
   date: new Date()
-)}`,
+})}
+
+If the user asks to schedule a task, use the scheduleTask tool.`,
 
       messages: pruneMessages({
         messages: await convertToModelMessages(this.messages),
@@ -116,50 +112,38 @@ ${getSchedulePrompt({
 
         getWeather: tool({
           description:
-            "Get the current weather for a city. Only use this tool when the user explicitly asks about weather.",
+            "Get the current weather for a city. Only call this tool when the user explicitly asks about weather.",
 
           inputSchema: z.object({
             city: z.string().describe("City name")
           }),
 
           execute: async ({ city }) => {
-            try {
-              const conditions = [
-                "sunny",
-                "cloudy",
-                "rainy",
-                "snowy"
-              ];
+            const conditions = [
+              "sunny",
+              "cloudy",
+              "rainy",
+              "snowy"
+            ];
 
-              const temperature =
-                Math.floor(Math.random() * 30) + 5;
+            const temperature =
+              Math.floor(Math.random() * 30) + 5;
 
-              return {
-                city,
-                temperature,
-                condition:
-                  conditions[
-                    Math.floor(Math.random() * conditions.length)
-                  ],
-                unit: "celsius"
-              };
-            } catch {
-              return {
-                error: true,
-                city,
-                message: "Weather lookup failed."
-              };
-            }
+            return {
+              city,
+              temperature,
+              condition:
+                conditions[
+                  Math.floor(Math.random() * conditions.length)
+                ],
+              unit: "celsius"
+            };
           }
         }),
 
-        /*
-         * 这个工具由浏览器端执行。
-         * Server 不应该自己执行它。
-         */
         getUserTimezone: tool({
           description:
-            "Get the user's local timezone and local time from their browser. Only use this when the user asks about their local time or timezone.",
+            "Get the user's local timezone and local time from their browser. Only call this when the user asks about their timezone or local time.",
 
           inputSchema: z.object({})
         }),
@@ -171,7 +155,13 @@ ${getSchedulePrompt({
           inputSchema: z.object({
             a: z.number(),
             b: z.number(),
-            operator: z.enum(["+", "-", "*", "/", "%"])
+            operator: z.enum([
+              "+",
+              "-",
+              "*",
+              "/",
+              "%"
+            ])
           }),
 
           needsApproval: async ({ a, b }) =>
@@ -184,7 +174,7 @@ ${getSchedulePrompt({
               };
             }
 
-            const operations: Record<
+            const ops: Record<
               string,
               (x: number, y: number) => number
             > = {
@@ -195,11 +185,9 @@ ${getSchedulePrompt({
               "%": (x, y) => x % y
             };
 
-            const result = operations[operator](a, b);
-
             return {
               expression: `${a} ${operator} ${b}`,
-              result
+              result: ops[operator](a, b)
             };
           }
         }),
@@ -250,8 +238,7 @@ ${getSchedulePrompt({
         }),
 
         getScheduledTasks: tool({
-          description:
-            "List all currently scheduled tasks.",
+          description: "List all scheduled tasks.",
 
           inputSchema: z.object({}),
 
@@ -288,9 +275,6 @@ ${getSchedulePrompt({
         })
       },
 
-      /*
-       * 防止模型因为 Tool Calling 异常进入循环。
-       */
       stopWhen: stepCountIs(8),
 
       abortSignal: options?.abortSignal
@@ -327,4 +311,3 @@ export default {
     );
   }
 } satisfies ExportedHandler<Env>;
-```
