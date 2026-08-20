@@ -23,8 +23,7 @@
       "new_sqlite_classes": ["ChatAgent"],
       "tag": "v1"
     }
-  ]
-}
+  ],
 
 "observability": {
   "enabled": false,
@@ -40,4 +39,5 @@
     "persist": true,
     "head_sampling_rate": 1
   }
+}
 }
