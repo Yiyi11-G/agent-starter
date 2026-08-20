@@ -44,17 +44,17 @@ export class ChatAgent extends AIChatAgent<Env> {
   }
 
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
-    const mcpTools = this.mcp.getAITools();
-    const workersai = createWorkersAI({ binding: this.env.AI });
+  const workersai = createWorkersAI({ binding: this.env.AI });
 
-    // === 关键修复：await workersai 函数 ===
-    const model = await workersai("@cf/meta/llama-3.1-8b-instruct");
+  const result = streamText({
+    model: workersai("@cf/meta/llama-3.1-8b-instruct"),
+    system: "You are a helpful assistant. Answer the user's question clearly and concisely.",
+    messages: await convertToModelMessages(this.messages),
+    abortSignal: options?.abortSignal
+  });
 
-    const result = streamText({
-      model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
-      system: `You are a helpful assistant that can understand images. You can check the weather, get the user's timezone, run calculations, and schedule tasks. When users share images, describe what you see and answer questions about them.
-
-${getSchedulePrompt({ date: new Date() })}
+  return result.toUIMessageStreamResponse();
+}
 
 If the user asks to schedule a task, use the schedule tool to schedule the task.`,
       messages: pruneMessages({
